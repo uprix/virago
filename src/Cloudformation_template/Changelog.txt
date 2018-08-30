@@ -1,0 +1,2 @@
+00e712d4a7c21b2802b3fa5cfe709bbe | 2018.02.08 11:55 | Added Group_Admin and Policy_S3_EU
+fb6ef288d3b3280fe1568734850833d5 | 2018.02.12 19:38 | fullv.3.1.json Added s3 admin group, user group, cloudtrail for baseline buckets. 

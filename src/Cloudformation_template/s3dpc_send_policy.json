@@ -1,0 +1,63 @@
+{
+"Parameters" : {
+"SecDevopsAccountID" : { 
+"Type" : "String",
+"Default" : "140492085282",
+"Description" : "Value for secdevops account id where event bus will accept our events"
+}
+ },
+	"Resources": 
+		{
+		"s3dpceventrulesecdevops":
+{
+  "Type" : "AWS::Events::Rule",
+  "DeletionPolicy" : "Retain",
+  "Properties" : {
+    "Description" : "Send bucket level changes to secdevops",
+    "EventPattern" : {
+  "source": [
+    "aws.s3"
+  ],
+  "detail-type": [
+    "AWS API Call via CloudTrail"
+  ],
+  "detail": {
+    "eventSource": [
+      "s3.amazonaws.com"
+    ],
+    "eventName": [
+      "DeleteBucketCors",
+      "DeleteBucketTagging",
+      "CreateBucket",
+      "PutBucketAcl",
+      "PutBucketCors",
+      "PutBucketPolicy",
+      "PutBucketTagging",
+      "PutBucketWebsite",
+      "DeleteBucketEncryption"
+    ]
+  }
+},
+    "Name" : "TSI_Base_CW_Rule_S3_ACL_Send_SecDevops",
+    "State" : "ENABLED",
+    "Targets" : [ {
+  "Arn" : 
+  { 
+								"Fn::Sub": 
+								[
+									"arn:aws:events:${region}:${secdevopsaccountid}:event-bus/default",
+									{"secdevopsaccountid" : {
+											"Ref" : "SecDevopsAccountID"
+										},
+										"region" : {
+											"Ref" : "AWS::Region"
+										}
+										}
+								]
+							},
+  "Id" : "TSI_Base_CW_Rule_S3_ACL_Send_SecDevops"
+} ]
+  }
+}
+		}
+		}

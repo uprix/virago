@@ -1,0 +1,56 @@
+import boto3
+import secrets
+import datetime
+import time
+import json
+from dateutil.tz import tzlocal
+
+organizations = boto3.client('organizations')
+
+def createRealAccount(accountname, accountemail):
+    print("Now creating the account")
+    createresponse = organizations.create_account(
+        Email=event['accountemail'],
+        AccountName=event['accountname'],
+        RoleName='TSI_Base_FullAccess',
+        IamUserAccessToBilling='DENY'
+    )
+    response = {}
+    response['CreateAccountStatus']={}
+    response['CreateAccountStatus']['State']=createresponse['CreateAccountStatus']['State']
+    response['CreateAccountStatus']['Id']=createresponse['CreateAccountStatus']['Id']
+    response['CreateAccountStatus']['AccountName']=createresponse['CreateAccountStatus']['AccountName']
+    if(createresponse['CreateAccountStatus']['State']=='SUCCEEDED'):
+        response['CreateAccountStatus']['AccountId']=createresponse['CreateAccountStatus']['AccountId']
+    return(response)
+
+def lambda_handler(event, context):
+    if (('realRun' in list(event.keys())) and (event['realRun']=='True')):
+        accountResponse = createRealAccount(event['accountname'],event['accountemail'])
+        return(accountResponse)
+    else:
+        stateList = ['SUCCEEDED']
+        state = secrets.choice(stateList)
+        if (state == 'FAILED'):
+            failureList = ['ACCOUNT_LIMIT_EXCEEDED','EMAIL_ALREADY_EXISTS','INVALID_ADDRESS','INVALID_EMAIL','CONCURRENT_ACCOUNT_MODIFICATION','INTERNAL_FAILURE']
+            failure =secrets.choice(failureList)
+            if (failure == 'CONCURRENT_ACCOUNT_MODIFICATION'):
+                failure = 'INTERNAL_FAILURE'
+            response = {
+            'CreateAccountStatus': {
+            'Id': 'car-bb945730a37d11e7baec500c6f428829',
+            'AccountName': event['accountname'],
+            'State': state,
+            'FailureReason': failure
+             }
+             }
+        else:
+            response = {
+            'CreateAccountStatus': {
+                'Id': 'car-bb945730a37d11e7baec500c6f428829',
+                'AccountName': event['accountname'],
+                'State': state,
+                'AccountId': '787043465971'
+                }
+            }
+        return(response)

@@ -1,0 +1,64 @@
+{
+    "pipeline": {
+        "roleArn": "arn:aws:iam::297193019640:role/AWS-CodePipeline-Service",
+        "stages": [
+            {
+                "name": "Source",
+                "actions": [
+                    {
+                        "inputArtifacts": [],
+                        "name": "Source",
+                        "actionTypeId": {
+                            "category": "Source",
+                            "owner": "AWS",
+                            "version": "1",
+                            "provider": "S3"
+                        },
+                        "outputArtifacts": [
+                            {
+                                "name": "MyApp"
+                            }
+                        ],
+                        "configuration": {
+                            "S3Bucket": "virago-baseline/stl/baseline/branch/master",
+                            "S3ObjectKey": "stl_baseline_branch_master.zip",
+                            "PollForSourceChanges": "false"
+                        },
+                        "runOrder": 1
+                    }
+                ]
+            },
+            {
+                "name": "Staging",
+                "actions": [
+                    {
+                        "inputArtifacts": [
+                            {
+                                "name": "MyApp"
+                            }
+                        ],
+                        "name": "Deploy-CodeDeploy-Application",
+                        "actionTypeId": {
+                            "category": "Deploy",
+                            "owner": "AWS",
+                            "version": "1",
+                            "provider": "CodeDeploy"
+                        },
+                        "outputArtifacts": [],
+                        "configuration": {
+                            "ApplicationName": "CodePipelineDemoApplication",
+                            "DeploymentGroupName": "CodePipelineDemoFleet"
+                        },
+                        "runOrder": 1
+                    }
+                ]
+            }
+        ],
+        "artifactStore": {
+            "type": "S3",
+            "location": "codepipeline-eu-central-1"
+        },
+        "name": "ViragoBaselineMasterPipeline",
+        "version": 1
+    }
+}

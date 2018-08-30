@@ -1,0 +1,141 @@
+{
+    "pipeline": {
+        "roleArn": "arn:aws:iam::412318185247:role/PIPELINEDEV_eu-central-1_ServiceRoleForCodePipeline",
+        "stages": [
+            {
+                "name": "Source",
+                "actions": [
+                    {
+                        "inputArtifacts": [],
+                        "name": "Source",
+                        "actionTypeId": {
+                            "category": "Source",
+                            "owner": "ThirdParty",
+                            "version": "1",
+                            "provider": "GitHub"
+                        },
+                        "outputArtifacts": [
+                            {
+                                "name": "github-stephanlo-tsystems"
+                            }
+                        ],
+                        "configuration": {
+                            "Owner": "mmscondo",
+                            "Repo": "cddemo",
+                            "PollForSourceChanges": "false",
+                            "Branch": "master",
+                            "OAuthToken": "bla"
+                        },
+                        "runOrder": 1
+                    }
+                ]
+            },
+            {
+                "name": "Build",
+                "actions": [
+                    {
+                        "inputArtifacts": [],
+                        "name": "Build",
+                        "actionTypeId": {
+                            "category": "Invoke",
+                            "owner": "AWS",
+                            "version": "1",
+                            "provider": "Lambda"
+                        },
+                        "outputArtifacts": [],
+                        "configuration": {
+                            "FunctionName": "mockPipeline-CodePipelineLambdaDummy",
+                            "UserParameters": "mockPipeline"
+                        },
+                        "runOrder": 1
+                    }
+                ]
+            },
+            {
+                "name": "Test-Provisioning",
+                "actions": [
+                    {
+                        "inputArtifacts": [],
+                        "name": "AcceptanceTest",
+                        "actionTypeId": {
+                            "category": "Invoke",
+                            "owner": "AWS",
+                            "version": "1",
+                            "provider": "Lambda"
+                        },
+                        "outputArtifacts": [],
+                        "configuration": {
+                            "FunctionName": "mockPipeline-CodePipelineLambdaDummy",
+                            "UserParameters": "mockPipeline"
+                        },
+                        "runOrder": 1
+                    }
+                ]
+            },
+            {
+                "name": "Test-Baseline",
+                "actions": [
+                    {
+                        "inputArtifacts": [],
+                        "name": "AcceptanceTest",
+                        "actionTypeId": {
+                            "category": "Invoke",
+                            "owner": "AWS",
+                            "version": "1",
+                            "provider": "Lambda"
+                        },
+                        "outputArtifacts": [],
+                        "configuration": {
+                            "FunctionName": "mockPipeline-CodePipelineLambdaDummy",
+                            "UserParameters": "mockPipeline"
+                        },
+                        "runOrder": 1
+                    }
+                ]
+            },
+            {
+                "name": "Production",
+                "actions": [
+                    {
+                        "inputArtifacts": [],
+                        "name": "Approval",
+                        "actionTypeId": {
+                            "category": "Approval",
+                            "owner": "AWS",
+                            "version": "1",
+                            "provider": "Manual"
+                        },
+                        "outputArtifacts": [],
+                        "configuration": {
+                            "ExternalEntityLink": "http://example.com",
+                            "CustomData": "The latest changes include feedback from Bob."
+                        },
+                        "runOrder": 1
+                    },
+                    {
+                        "inputArtifacts": [],
+                        "name": "SwitchEnvironments",
+                        "actionTypeId": {
+                            "category": "Invoke",
+                            "owner": "AWS",
+                            "version": "1",
+                            "provider": "Lambda"
+                        },
+                        "outputArtifacts": [],
+                        "configuration": {
+                            "FunctionName": "mockPipeline-CodePipelineLambdaDummy",
+                            "UserParameters": "mockPipeline"
+                        },
+                        "runOrder": 2
+                    }
+                ]
+            }
+        ],
+        "artifactStore": {
+            "type": "S3",
+            "location": "412318185247-pipeline"
+        },
+        "name": "CodePipeline-412318185247-1",
+        "version": 1
+    }
+}

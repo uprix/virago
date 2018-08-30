@@ -1,0 +1,114 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Enable CodePipeline similar to AWS-CodePipeline-Service
+Parameters: {}
+Metadata: {}
+Resources:
+  CodePipelineTrustRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Sid: '1'
+          Effect: Allow
+          Principal:
+            Service:
+            - codepipeline.amazonaws.com
+          Action: sts:AssumeRole
+      Path: "/"
+      RoleName:
+        Fn::Join:
+        - ''
+        - - PIPELINEDEV_
+          - Ref: AWS::Region
+          - _ServiceRoleForCodePipeline
+  CodePipelineLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      RoleName:
+        Fn::Join:
+        - ''
+        - - PIPELINEDEV_
+          - Ref: AWS::Region
+          - _ServiceRoleForCodePipelineLambda
+  CodePipelineRolePolicies:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: CodePipelinePolicy
+      PolicyDocument:
+        Statement:
+        - Action:
+          - s3:*
+          Resource:
+          - "*"
+          Effect: Allow
+        - Action:
+          - s3:PutBucketPolicy
+          - s3:PutObject
+          Resource:
+          - Fn::Join:
+            - ''
+            - - arn:aws:s3:::codepipeline-
+              - Ref: AWS::Region
+              - "-"
+              - Ref: AWS::AccountId
+              - "-"
+              - Ref: AWS::StackName
+          Effect: Allow
+        - Action:
+          - codepipeline:*
+          - iam:ListRoles
+          - iam:PassRole
+          - sns:*
+          - elasticbeanstalk:DescribeApplications
+          - elasticbeanstalk:DescribeEnvironments
+          - lambda:*
+          Resource: "*"
+          Effect: Allow
+      Roles:
+      - Ref: CodePipelineTrustRole
+  LambdaCodePipelineExecutionPolicy:
+    DependsOn:
+    - CodePipelineLambdaRole
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: LambdaRolePolicy
+      Roles:
+      - Ref: CodePipelineLambdaRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - logs:*
+          Resource:
+          - arn:aws:logs:*:*:*
+        - Effect: Allow
+          Action:
+          - codepipeline:PutJobSuccessResult
+          - codepipeline:PutJobFailureResult
+          Resource:
+          - "*"
+Outputs:
+  ServiceRoleForCodePipelineName:
+    Value:
+      Fn::Join:
+      - ''
+      - - Ref: CodePipelineTrustRole
+    Description: Role arn to assume the pipeline to
+  ServiceRoleForCodePipelineLambdaName:
+    Value:
+      Fn::Join:
+      - ''
+      - - Ref: CodePipelineLambdaRole
+    Description: Role arn to assume the pipeline lambdas to

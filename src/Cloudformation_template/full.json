@@ -1,0 +1,2087 @@
+{
+	"Resources": 
+		{
+	"hashlambda" : {
+  "Type" : "AWS::Lambda::Function",
+  "Properties" : {
+      "Code" : {
+          "ZipFile" : { "Fn::Join" : ["\n", [
+"import hashlib",
+"import json",
+"import cfnresponse",
+"def handler(event, context):",
+"   hashedID=hashlib.sha1(event['ResourceProperties']['accountID'].encode('utf-8')).hexdigest()",
+"   responseData = {}",
+"   responseData['Data'] = hashedID",
+"   cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)"
+]]}
+          },
+      "Description" : "Return sha1 hash of input Data",
+      "FunctionName" : "getHashSha1",
+      "Role" : {
+											"Fn::GetAtt": 
+											[
+												"rolehashlambda",
+												"Arn"
+											]
+										},
+      "Runtime" : "python3.6",
+      "Handler" : "index.handler"
+      },
+            "DependsOn": [ "rolehashlambda" ]
+},
+		"rolehashlambda": {
+		"Type": "AWS::IAM::Role",
+		"Properties": {
+		"RoleName" : "rolehashlambda",
+		"AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": ["lambda.amazonaws.com"]
+                    },
+                    "Action": ["sts:AssumeRole"]
+                }
+            ]
+        },
+        "Path": "/",
+        "Policies": [ {
+               "PolicyName": "lambdahashloggroup",
+               "PolicyDocument": {
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": "logs:CreateLogGroup",
+            "Resource": 
+            {
+						"Fn::Join": 
+						[
+							"",
+							[
+								"arn:aws:logs:",
+								{
+								"Ref": "AWS::Region"
+							},
+								":",
+								{
+									"Ref": "AWS::AccountId"
+								},
+
+								":*"
+							]
+						]
+					}
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            "Resource": [
+                {
+						"Fn::Join": 
+						[
+							"",
+							[
+								"arn:aws:logs:",
+								{
+								"Ref": "AWS::Region"
+							},
+								":",
+								{
+									"Ref": "AWS::AccountId"
+								},
+
+								":log-group:/aws/lambda/getHashSha1:*"
+							]
+						]
+					}
+            ]
+        }
+    ]
+}
+               } ]
+		}
+},
+	"hashvalue" : {
+         "Type": "Custom::getHash",
+         "Version" : "1.0",
+         "Properties" : {
+            "ServiceToken": 
+            {
+									"Fn::Sub": 
+									[
+										"arn:aws:lambda:${region}:${accountid}:function:getHashSha1",
+										{
+											"accountid": 
+											{
+												"Ref": "AWS::AccountId"
+											},
+											"region":
+											{
+								"Ref": "AWS::Region"
+							}
+										}
+									]
+								},
+            "accountID" : {"Ref" : "AWS::AccountId"}
+         },
+         "DependsOn" : ["hashlambda"]
+      },
+		"s3openbucket": 
+		{
+			"Type": "AWS::S3::Bucket",
+			"Properties": 
+			{
+				"BucketName" : {
+								"Fn::Sub": 
+								[
+									"${stackname}-s3-open",
+									{"stackname" : {
+											"Fn::GetAtt": 
+											[
+												"hashvalue",
+												"Data"
+											]
+										}
+										}
+								]
+							},
+				"AccessControl": "Private",
+				"Tags" : [{"Key": "DPC", "Value" : "open"},
+					{"Key": "Name","Value":"Baseline"}]	
+			},
+			"DependsOn" : ["hashvalue"]
+		},
+
+		"s3openbucketpolicy": 
+		{
+			"Type": "AWS::S3::BucketPolicy",
+			"Properties": 
+			{
+				"Bucket": 
+				{
+					"Ref": "s3openbucket"
+				},
+
+				"PolicyDocument": 
+				{
+					"Version": "2012-10-17",
+					"Statement": 
+					[
+						{
+							"Sid": "AddCannedAcl",
+							"Effect": "Deny",
+							"Principal": 
+							{
+								"AWS": "*"
+							},
+
+							"Action": 
+							[
+								"s3:PutObject",
+								"s3:PutObjectAcl"
+							],
+
+							"Resource": 
+							{
+								"Fn::Sub": 
+								[
+									"${s3arn}/*",
+									{
+										"s3arn": 
+										{
+											"Fn::GetAtt": 
+											[
+												"s3openbucket",
+												"Arn"
+											]
+										}
+									}
+								]
+							},
+
+							"Condition": 
+							{
+								"StringNotEquals": 
+								{
+									"s3:x-amz-acl": "private"
+								}
+							}
+						}
+					]
+				}
+			},
+			"DependsOn" : ["s3openbucket"]
+		},
+
+		"groups3open": 
+		{
+			"Type": "AWS::IAM::Group",
+			"Properties": 
+			{
+				"GroupName": "Group_S3_open",
+				"Path": "/",
+				"ManagedPolicyArns": 
+				[
+					{
+						"Fn::Join": 
+						[
+							"",
+							[
+								"arn:aws:iam::",
+								{
+									"Ref": "AWS::AccountId"
+								},
+
+								":policy/Policy_MFA"
+							]
+						]
+					}
+				]
+			},
+			"DependsOn" : ["IAMPOLICYMFA"] 
+		},
+
+		"Policys3open": 
+		{
+			"Type": "AWS::IAM::ManagedPolicy",
+			"Properties": 
+			{
+				"Description": "Policy for managing s3 open bucket",
+				"Groups": 
+				[
+					"Group_S3_open"
+				],
+
+				"PolicyDocument": 
+				{
+					"Version": "2012-10-17",
+					"Statement": 
+					[
+						{
+							"Effect": "Allow",
+							"Action": 
+							[
+								"s3:ListBucket"
+							],
+
+							"Resource": 
+							[
+								{
+									"Fn::GetAtt": 
+									[
+										"s3openbucket",
+										"Arn"
+									]
+								}
+							]
+						},
+
+						{
+							"Effect": "Allow",
+							"Action": 
+							[
+								"s3:PutObject",
+								"s3:GetObject",
+								"s3:DeleteObject",
+								"s3:PutObjectAcl"
+							],
+
+							"Resource": 
+							[
+								{
+									"Fn::Sub": 
+									[
+										"${s3arn}/*",
+										{
+											"s3arn": 
+											{
+												"Fn::GetAtt": 
+												[
+													"s3openbucket",
+													"Arn"
+												]
+											}
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+
+				"ManagedPolicyName": "Policy_S3_Open"
+			},
+
+			"DependsOn": 
+			[
+				"groups3open",
+				"s3openbucket"
+			]
+		},
+		"IAMPOLICYMFA": 
+		{
+			"Type": "AWS::IAM::ManagedPolicy",
+			"Properties": 
+			{
+				"Description": 
+				{
+					"Fn::Join": 
+					[
+						" ",
+						[
+							"Force users with any right access to configure their authentication with MFA before gaining their privileges for ",
+							{
+								"Ref": "AWS::AccountId"
+							}
+						]
+					]
+				},
+				"Groups" : ["Group_PowerUser"],
+
+				"PolicyDocument": 
+				{
+					"Version": "2012-10-17",
+					"Statement": 
+					[
+						{
+							"Sid": "AllowAllUsersToListAccounts",
+							"Effect": "Allow",
+							"Action": 
+							[
+								"iam:ListAccountAliases",
+								"iam:ListUsers",
+								"iam:GetAccountSummary"
+							],
+
+							"Resource": "*"
+						},
+
+						{
+							"Sid": "AllowIndividualUserToSeeAndManageOnlyTheirOwnAccountInformation",
+							"Effect": "Allow",
+							"Action": 
+							[
+								"iam:ChangePassword",
+								"iam:CreateAccessKey",
+								"iam:CreateLoginProfile",
+								"iam:DeleteAccessKey",
+								"iam:DeleteLoginProfile",
+								"iam:GetAccountPasswordPolicy",
+								"iam:GetLoginProfile",
+								"iam:ListAccessKeys",
+								"iam:UpdateAccessKey",
+								"iam:UpdateLoginProfile",
+								"iam:ListSigningCertificates",
+								"iam:DeleteSigningCertificate",
+								"iam:UpdateSigningCertificate",
+								"iam:UploadSigningCertificate",
+								"iam:ListSSHPublicKeys",
+								"iam:GetSSHPublicKey",
+								"iam:DeleteSSHPublicKey",
+								"iam:UpdateSSHPublicKey",
+								"iam:UploadSSHPublicKey"
+							],
+
+							"Resource": 
+							{
+								"Fn::Join": 
+								[
+									"",
+									[
+										"arn:aws:iam::",
+										{
+											"Ref": "AWS::AccountId"
+										},
+
+										":user/${aws:username}"
+									]
+								]
+							}
+						},
+
+						{
+							"Sid": "AllowIndividualUserToListOnlyTheirOwnMFA",
+							"Effect": "Allow",
+							"Action": 
+							[
+								"iam:ListVirtualMFADevices",
+								"iam:ListMFADevices"
+							],
+
+							"Resource": 
+							[
+								{
+									"Fn::Join": 
+									[
+										"",
+										[
+											"arn:aws:iam::",
+											{
+												"Ref": "AWS::AccountId"
+											},
+
+											":mfa/*"
+										]
+									]
+								},
+
+								{
+									"Fn::Join": 
+									[
+										"",
+										[
+											"arn:aws:iam::",
+											{
+												"Ref": "AWS::AccountId"
+											},
+
+											":user/${aws:username}"
+										]
+									]
+								}
+							]
+						},
+
+						{
+							"Sid": "AllowIndividualUserToManageTheirOwnMFA",
+							"Effect": "Allow",
+							"Action": 
+							[
+								"iam:CreateVirtualMFADevice",
+								"iam:DeleteVirtualMFADevice",
+								"iam:RequestSmsMfaRegistration",
+								"iam:FinalizeSmsMfaRegistration",
+								"iam:EnableMFADevice",
+								"iam:ResyncMFADevice"
+							],
+
+							"Resource": 
+							[
+								{
+									"Fn::Join": 
+									[
+										"",
+										[
+											"arn:aws:iam::",
+											{
+												"Ref": "AWS::AccountId"
+											},
+
+											":mfa/${aws:username}"
+										]
+									]
+								},
+
+								{
+									"Fn::Join": 
+									[
+										"",
+										[
+											"arn:aws:iam::",
+											{
+												"Ref": "AWS::AccountId"
+											},
+
+											":user/${aws:username}"
+										]
+									]
+								}
+							]
+						},
+
+						{
+							"Sid": "AllowIndividualUserToDeactivateOnlyTheirOwnMFAOnlyWhenUsingMFA",
+							"Effect": "Allow",
+							"Action": 
+							[
+								"iam:DeactivateMFADevice"
+							],
+
+							"Resource": 
+							[
+								{
+									"Fn::Join": 
+									[
+										"",
+										[
+											"arn:aws:iam::",
+											{
+												"Ref": "AWS::AccountId"
+											},
+
+											":mfa/${aws:username}"
+										]
+									]
+								},
+
+								{
+									"Fn::Join": 
+									[
+										"",
+										[
+											"arn:aws:iam::",
+											{
+												"Ref": "AWS::AccountId"
+											},
+
+											":user/${aws:username}"
+										]
+									]
+								}
+							],
+
+							"Condition": 
+							{
+								"Bool": 
+								{
+									"aws:MultiFactorAuthPresent": "false"
+								}
+							}
+						},
+
+						{
+							"Sid": "BlockAnyAccessOtherThanAboveUnlessSignedInWithMFA",
+							"Effect": "Deny",
+							"NotAction": "iam:*",
+							"Resource": "*",
+							"Condition": 
+							{
+								"BoolIfExists": 
+								{
+									"aws:MultiFactorAuthPresent": "false"
+								}
+							}
+						}
+					]
+				},
+
+				"ManagedPolicyName": "Policy_MFA"
+			},
+
+			"DependsOn": 
+			[
+				"GroupPowerUser"
+			]
+		},
+
+		"PolicyTSIPowerUser": 
+		{
+			"Type": "AWS::IAM::ManagedPolicy",
+			"Properties": 
+			{
+				"Description": 
+				{
+					"Fn::Join": 
+					[
+						" ",
+						[
+							"Enables right access to all, but IAM and Organisations.",
+							{
+								"Ref": "AWS::AccountId"
+							}
+						]
+					]
+				},
+				"Groups" : ["Group_PowerUser"],
+				"PolicyDocument": 
+				{
+					"Version": "2012-10-17",
+					"Statement": 
+					[
+						{
+							"Effect": "Allow",
+							"NotAction": 
+							[
+								"iam:*",
+                "organizations:*",
+                "config:*",
+                "trustedadvisor:*",
+                "kms:*",
+                "lambda:*",
+                "config:*",
+                "cloudwatch:*",
+                "trail:*"
+							],
+
+							"Resource": "*"
+						}
+					]
+				},
+
+				"ManagedPolicyName": "Policy_TSI_PowerUser"
+			},
+
+			"DependsOn": 
+			[
+				"GroupPowerUser"
+			]
+		},
+
+		"GroupPowerUser": 
+		{
+			"Type": "AWS::IAM::Group",
+			"Properties": 
+			{
+				"GroupName": "Group_PowerUser",
+				"Path": "/"
+			}
+		},
+		"GroupBilling": 
+		{
+			"Type": "AWS::IAM::Group",
+			"Properties": 
+			{
+				"GroupName": "Group_Billing",
+				"Path": "/",
+				"ManagedPolicyArns": [
+				{
+					"Fn::Join": 
+					[
+						"",
+						[
+							"arn:aws:iam::",
+							{
+								"Ref": "AWS::AccountId"
+							},
+							":policy/Policy_MFA"
+						]
+					]
+				},
+				"arn:aws:iam::aws:policy/job-function/Billing"
+				]
+			},
+			"DependsOn" : ["IAMPOLICYMFA"]
+		},
+		"GroupAudit": 
+		{
+			"Type": "AWS::IAM::Group",
+			"Properties": 
+			{
+				"GroupName": "Group_Audit",
+				"Path": "/",
+				"ManagedPolicyArns": [
+				{
+					"Fn::Join": 
+					[
+						"",
+						[
+							"arn:aws:iam::",
+							{
+								"Ref": "AWS::AccountId"
+							},
+							":policy/Policy_MFA"
+						]
+					]
+				},
+				"arn:aws:iam::aws:policy/ReadOnlyAccess"
+				]
+			},
+			"DependsOn" : ["IAMPOLICYMFA"]
+		},
+		"GroupEC2Admin": 
+		{
+			"Type": "AWS::IAM::Group",
+			"Properties": 
+			{
+				"GroupName": "Group_EC2_Admin",
+				"Path": "/",
+				"ManagedPolicyArns": [
+				{
+					"Fn::Join": 
+					[
+						"",
+						[
+							"arn:aws:iam::",
+							{
+								"Ref": "AWS::AccountId"
+							},
+							":policy/Policy_MFA"
+						]
+					]
+				},
+				"arn:aws:iam::aws:policy/AmazonEC2FullAccess",
+				"arn:aws:iam::aws:policy/AmazonVPCReadOnlyAccess",
+				"arn:aws:iam::aws:policy/AutoScalingFullAccess",
+				"arn:aws:iam::aws:policy/AmazonEC2ReportsAccess",
+				"arn:aws:iam::aws:policy/CloudWatchActionsEC2Access"
+				]
+			},
+			"DependsOn" : ["IAMPOLICYMFA"]
+		},
+		"Policyiammacduser": 
+		{
+			"Type": "AWS::IAM::ManagedPolicy",
+			"Properties": 
+			{
+				"Description": "Move add change delete users within te predefined groups (Group_*)",
+				"Groups": 
+				[
+					"Group_IAM_Admin"
+				],
+
+				"PolicyDocument": 
+				{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "AllowUsersToPerformUserActions",
+            "Effect": "Allow",
+            "Action": [
+                "iam:AddUserToGroup",
+                "iam:CreateUser",
+		"iam:CreateLogin*",
+                "iam:UpdateUser",
+                "iam:DeleteUser",
+                "iam:DeleteSigningCertificate",
+                "iam:DeleteLoginProfile",
+                "iam:RemoveUserFromGroup",
+                "iam:GenerateCredentialReport",
+                "iam:GetCredentialReport",
+                "iam:GetUser",
+                "iam:GetAccount*",
+                "iam:List*",                
+		"iam:UpdateAccessKey",
+                "iam:CreateAccessKey",
+                "iam:DeleteAccessKey"
+                
+            ],
+
+
+							"Resource": 
+							[
+								{
+									"Fn::Join": 
+									[
+										"",
+										[
+											"arn:aws:iam::",
+											{
+												"Ref": "AWS::AccountId"
+											},
+
+											":group/Group_*"
+										]
+									]
+								},
+
+								{
+									"Fn::Join": 
+									[
+										"",
+										[
+											"arn:aws:iam::",
+											{
+												"Ref": "AWS::AccountId"
+											},
+
+											":user/A??????"
+										]
+									]
+								},
+								{
+									"Fn::Join": 
+									[
+										"",
+										[
+											"arn:aws:iam::",
+											{
+												"Ref": "AWS::AccountId"
+											},
+
+											":user/A???????"
+										]
+									]
+								},
+								{
+									"Fn::Join": 
+									[
+										"",
+										[
+											"arn:aws:iam::",
+											{
+												"Ref": "AWS::AccountId"
+											},
+
+											":user/A????????"
+										]
+									]
+								},
+								{
+									"Fn::Join": 
+									[
+										"",
+										[
+											"arn:aws:iam::",
+											{
+												"Ref": "AWS::AccountId"
+											},
+
+											":user/X??????"
+										]
+									]
+								}
+							]
+						}
+					]
+				},
+
+				"ManagedPolicyName": "Policy_IAM_MACD_User"
+			},
+
+			"DependsOn": 
+			[
+				"Groupiamadmin"
+			]
+		},
+
+		"Groupiamadmin": 
+		{
+			"Type": "AWS::IAM::Group",
+			"Properties": 
+			{
+				"GroupName": "Group_IAM_Admin",
+				"Path": "/",
+				"ManagedPolicyArns": 
+				[
+					{
+						"Fn::Join": 
+						[
+							"",
+							[
+								"arn:aws:iam::",
+								{
+									"Ref": "AWS::AccountId"
+								},
+
+								":policy/Policy_MFA"
+							]
+						]
+					},
+
+					"arn:aws:iam::aws:policy/IAMReadOnlyAccess"
+				]
+			},
+			"DependsOn" : ["IAMPOLICYMFA"]
+		},
+		"PolicyEc2Micro": 
+		{
+			"Type": "AWS::IAM::ManagedPolicy",
+			"Properties": 
+			{
+				"Description":  "allows only usage of free tier",
+				"Groups" : ["Group_VPC_Admin"],
+				"PolicyDocument": 
+				{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Deny",
+            "Action": "ec2:*",
+            "Resource": [
+            {
+					"Fn::Join": 
+					[
+						"",
+						[
+							"arn:aws:ec2:",
+							{
+								"Ref": "AWS::Region"
+							},
+							":",
+							{
+								"Ref": "AWS::AccountId"
+							},
+							":instance/*"
+						]
+					]
+				}
+            ],
+            "Condition": {
+                "StringNotEquals": {
+                    "ec2:InstanceType": [
+                        "t2.micro"
+                    ]
+                }
+            }
+        },
+        {
+            "Effect": "Allow",
+            "Action": "ec2:*",
+            "Resource": [
+                "*"
+            ]
+        }
+    ]
+},
+
+				"ManagedPolicyName": "Policy_EC2_t2.micro"
+			},
+
+			"DependsOn": 
+			[
+				"GroupVPCAdmin"
+			]
+		},
+
+		"GroupVPCAdmin": 
+		{
+			"Type": "AWS::IAM::Group",
+			"Properties": 
+			{
+				"GroupName": "Group_VPC_Admin",
+				"Path": "/",
+				"ManagedPolicyArns": [
+				{
+					"Fn::Join": 
+					[
+						"",
+						[
+							"arn:aws:iam::",
+							{
+								"Ref": "AWS::AccountId"
+							},
+							":policy/Policy_MFA"
+						]
+					]
+				},
+				"arn:aws:iam::aws:policy/AmazonEC2FullAccess",
+				"arn:aws:iam::aws:policy/AmazonVPCFullAccess"
+				]
+			},
+			"DependsOn" : ["IAMPOLICYMFA"]
+		},
+		"s3internalbucket": 
+		{
+			"Type": "AWS::S3::Bucket",
+			"Properties": 
+			{
+				"BucketName" : {
+								"Fn::Sub": 
+								[
+									"${stackname}-s3-internal",
+									{"stackname" : {
+											"Fn::GetAtt": 
+											[
+												"hashvalue",
+												"Data"
+											]
+										}
+										}
+								]
+							},
+				"AccessControl": "Private",
+				"Tags" : [{"Key": "DPC", "Value" : "internal"},
+					{"Key": "Name","Value":"Baseline"}]	
+			},
+			"DependsOn" : ["hashvalue"]
+		},
+		"Policys3internal": 
+		{
+			"Type": "AWS::IAM::ManagedPolicy",
+			"Properties": 
+			{
+				"Description": "Policy for managing s3 internal bucket",
+				"Groups": 
+				[
+					"Group_S3_internal"
+				],
+
+				"PolicyDocument": 
+				{
+					"Version": "2012-10-17",
+					"Statement": 
+					[
+						{
+							"Effect": "Allow",
+							"Action": 
+							[
+								"s3:ListBucket"
+							],
+
+							"Resource": 
+							[
+								{
+									"Fn::GetAtt": 
+									[
+										"s3internalbucket",
+										"Arn"
+									]
+								}
+							]
+						},
+
+						{
+							"Effect": "Allow",
+							"Action": 
+							[
+								"s3:PutObject",
+								"s3:GetObject",
+								"s3:DeleteObject",
+								"s3:PutObjectAcl"
+							],
+
+							"Resource": 
+							[
+								{
+									"Fn::Sub": 
+									[
+										"${s3arn}/*",
+										{
+											"s3arn": 
+											{
+												"Fn::GetAtt": 
+												[
+													"s3internalbucket",
+													"Arn"
+												]
+											}
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+
+				"ManagedPolicyName": "Policy_S3_Internal"
+			},
+
+			"DependsOn": 
+			[
+				"groups3internal",
+				"s3internalbucket"
+			]
+		},
+		"groups3internal": 
+		{
+			"Type": "AWS::IAM::Group",
+			"Properties": 
+			{
+				"GroupName": "Group_S3_internal",
+				"Path": "/",
+				"ManagedPolicyArns": 
+				[
+					{
+						"Fn::Join": 
+						[
+							"",
+							[
+								"arn:aws:iam::",
+								{
+									"Ref": "AWS::AccountId"
+								},
+
+								":policy/Policy_MFA"
+							]
+						]
+					}
+				]
+			},
+			"DependsOn" : ["IAMPOLICYMFA"] 
+		},
+		"s3internalbucketpolicy": 
+		{
+			"Type": "AWS::S3::BucketPolicy",
+			"Properties": 
+			{
+				"Bucket": 
+				{
+					"Ref": "s3internalbucket"
+				},
+
+				"PolicyDocument": 
+				{
+    "Version": "2012-10-17",
+    "Id": "Policy1507908854995",
+    "Statement": [
+        {
+            "Sid": "Stmt1507908846619",
+            "Effect": "Deny",
+            "Principal": {
+                "AWS": "*"
+            },
+            "Action": "s3:PutObject",
+            "Resource": {
+								"Fn::Sub": 
+								[
+									"${s3arn}/*",
+									{
+										"s3arn": 
+										{
+											"Fn::GetAtt": 
+											[
+												"s3internalbucket",
+												"Arn"
+											]
+										}
+									}
+								]
+							},
+            "Condition": {
+                "ArnNotEquals": {
+                    "s3:x-amz-server-side-encryption-aws-kms-key-id": 
+                    {
+									"Fn::GetAtt": 
+											[
+												"kmsinternalkey",
+												"Arn"
+											]
+								},
+                    "s3:x-amz-server-side-encryption": "aws:kms"
+                }
+            }
+        },
+        {
+            "Sid": "AddCannedAcl",
+            "Effect": "Deny",
+            "Principal": {
+                "AWS": "*"
+            },
+            "Action": [
+                "s3:PutObject",
+                "s3:PutObjectAcl"
+            ],
+            "Resource": {
+								"Fn::Sub": 
+								[
+									"${s3arn}/*",
+									{
+										"s3arn": 
+										{
+											"Fn::GetAtt": 
+											[
+												"s3internalbucket",
+												"Arn"
+											]
+										}
+									}
+								]
+							},
+            "Condition": {
+                "StringNotEquals": {
+                    "s3:x-amz-acl": "private"
+                }
+            }
+        }
+    ]
+}
+			},
+			"DependsOn" : ["s3internalbucket", "kmsinternalkey"]
+		},
+		"s3confidentialbucket": 
+		{
+			"Type": "AWS::S3::Bucket",
+			"Properties": 
+			{
+				"BucketName" : {
+								"Fn::Sub": 
+								[
+									"${stackname}-s3-confidential",
+									{"stackname" : {
+											"Fn::GetAtt": 
+											[
+												"hashvalue",
+												"Data"
+											]
+										}
+										}
+								]
+							},
+				"AccessControl": "Private",
+				"Tags" : [{"Key": "DPC", "Value" : "confidential"},
+					{"Key": "Name","Value":"Baseline"}]	
+			},
+			"DependsOn" : ["hashvalue"]
+		},
+		"Policys3confidential": 
+		{
+			"Type": "AWS::IAM::ManagedPolicy",
+			"Properties": 
+			{
+				"Description": "Policy for managing s3 confidential bucket",
+				"Groups": 
+				[
+					"Group_S3_confidential"
+				],
+
+				"PolicyDocument": 
+				{
+					"Version": "2012-10-17",
+					"Statement": 
+					[
+						{
+							"Effect": "Allow",
+							"Action": 
+							[
+								"s3:ListBucket"
+							],
+
+							"Resource": 
+							[
+								{
+									"Fn::GetAtt": 
+									[
+										"s3confidentialbucket",
+										"Arn"
+									]
+								}
+							]
+						},
+
+						{
+							"Effect": "Allow",
+							"Action": 
+							[
+								"s3:PutObject",
+								"s3:GetObject",
+								"s3:DeleteObject",
+								"s3:PutObjectAcl"
+							],
+
+							"Resource": 
+							[
+								{
+									"Fn::Sub": 
+									[
+										"${s3arn}/*",
+										{
+											"s3arn": 
+											{
+												"Fn::GetAtt": 
+												[
+													"s3confidentialbucket",
+													"Arn"
+												]
+											}
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+
+				"ManagedPolicyName": "Policy_S3_Confidential"
+			},
+
+			"DependsOn": 
+			[
+				"groups3confidential",
+				"s3confidentialbucket"
+			]
+		},
+		"groups3confidential": 
+		{
+			"Type": "AWS::IAM::Group",
+			"Properties": 
+			{
+				"GroupName": "Group_S3_confidential",
+				"Path": "/",
+				"ManagedPolicyArns": 
+				[
+					{
+						"Fn::Join": 
+						[
+							"",
+							[
+								"arn:aws:iam::",
+								{
+									"Ref": "AWS::AccountId"
+								},
+
+								":policy/Policy_MFA"
+							]
+						]
+					}
+				]
+			},
+			"DependsOn" : ["IAMPOLICYMFA"] 
+		},
+		"s3confidentialbucketpolicy": 
+		{
+			"Type": "AWS::S3::BucketPolicy",
+			"Properties": 
+			{
+				"Bucket": 
+				{
+					"Ref": "s3confidentialbucket"
+				},
+
+				"PolicyDocument": 
+				{
+    "Version": "2012-10-17",
+    "Id": "Policy1507908854995",
+    "Statement": [
+        {
+            "Sid": "Stmt1507908846619",
+            "Effect": "Deny",
+            "Principal": {
+                "AWS": "*"
+            },
+            "Action": "s3:PutObject",
+            "Resource": {
+								"Fn::Sub": 
+								[
+									"${s3arn}/*",
+									{
+										"s3arn": 
+										{
+											"Fn::GetAtt": 
+											[
+												"s3confidentialbucket",
+												"Arn"
+											]
+										}
+									}
+								]
+							},
+            "Condition": {
+                "ArnNotEquals": {
+                    "s3:x-amz-server-side-encryption-aws-kms-key-id": 
+                   {
+									"Fn::GetAtt": 
+											[
+												"kmsconfidentialkey",
+												"Arn"
+											]
+								},
+                    "s3:x-amz-server-side-encryption": "aws:kms"
+                }
+            }
+        },
+        {
+            "Sid": "AddCannedAcl",
+            "Effect": "Deny",
+            "Principal": {
+                "AWS": "*"
+            },
+            "Action": [
+                "s3:PutObject",
+                "s3:PutObjectAcl"
+            ],
+            "Resource": {
+								"Fn::Sub": 
+								[
+									"${s3arn}/*",
+									{
+										"s3arn": 
+										{
+											"Fn::GetAtt": 
+											[
+												"s3confidentialbucket",
+												"Arn"
+											]
+										}
+									}
+								]
+							},
+            "Condition": {
+                "StringNotEquals": {
+                    "s3:x-amz-acl": "private"
+                }
+            }
+        }
+    ]
+}
+			},
+			"DependsOn" : ["s3confidentialbucket", "kmsconfidentialkey"]
+		},
+		"kmsinternalkey" : {
+  "Type" : "AWS::KMS::Key",
+  "Properties" : {
+    "Description" : "Default encryption key for internal",
+    "KeyPolicy" : {
+    "Version": "2012-10-17",
+    "Statement": [{
+  "Sid": "Enable IAM User Permissions for internal key",
+  "Effect": "Allow",
+  "Principal": {"AWS": {"Fn::Sub": 
+								[
+									"arn:aws:iam::${accountid}:root",
+									{
+										"accountid": 
+										{
+											"Ref" : "AWS::AccountId"
+										}
+									}
+								]} },
+  "Action": ["kms:*"],
+  "Resource": "*"
+}]}
+  }
+  },
+  "kmsinternalkeyalias" : {
+  "Type" : "AWS::KMS::Alias",
+  "Properties" : {
+    "AliasName" : "alias/InternalS3Key",
+    "TargetKeyId": {
+											"Fn::GetAtt": 
+											[
+												"kmsinternalkey",
+												"Arn"
+											]
+										}
+  }
+  },
+  
+"kmsconfidentialkey" : {
+  "Type" : "AWS::KMS::Key",
+  "Properties" : {
+    "Description" : "Default encryption key for confidential",
+    "KeyPolicy" : {
+    "Version": "2012-10-17",
+    "Statement": [{
+  "Sid": "Enable IAM User Permissions for confidential key",
+  "Effect": "Allow",
+  "Principal": {"AWS": {"Fn::Sub": 
+								[
+									"arn:aws:iam::${accountid}:root",
+									{
+										"accountid": 
+										{
+											"Ref" : "AWS::AccountId"
+										}
+									}
+								]} },
+  "Action": ["kms:*"],
+  "Resource": "*"
+  }
+  ]
+}
+  }
+	},
+	"kmsconfidentialkeyalias" : {
+  "Type" : "AWS::KMS::Alias",
+  "Properties" : {
+    "AliasName" : "alias/ConfidentialS3Key",
+    "TargetKeyId": {
+											"Fn::GetAtt": 
+											[
+												"kmsconfidentialkey",
+												"Arn"
+											]
+										}
+  }
+  },
+  "Policys3EUOnly":
+  {
+			"Type": "AWS::IAM::ManagedPolicy",
+			"Properties": 
+			{
+				"Description": "Policy to allow s3 bucket only in EU",
+				"Groups": 
+				[
+					"Group_S3_Admin"
+				],
+
+				"PolicyDocument": 
+				{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "AllowListS3onlyEU",
+            "Effect": "Allow",
+            "Action": [
+                "s3:List*"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "AllowS3onlyEU",
+            "Effect": "Allow",
+            "Action": [
+                "s3:*"
+            ],
+            "Condition": {
+                "StringLike": {
+                    "s3:locationconstraint": "eu-central-1"
+                }
+            },
+            "Resource": "*"
+        },
+        {
+            "Sid": "DenyS3notEU",
+            "Effect": "Deny",
+            "Action": [
+                "s3:Create*",
+                "s3:Delete*",
+                "s3:PutBucket*"
+            ],
+            "Condition": {
+                "StringNotLike": {
+                    "s3:locationconstraint": "eu-central-1"
+                }
+            },
+            "Resource": "*"
+        }
+    ]
+
+},
+					
+			"ManagedPolicyName": "Policy_S3_EU"		
+				},
+"DependsOn": 
+			[
+				"Groups3Admin"
+			]
+				
+			},
+
+	"Groups3Admin":
+	{
+			"Type": "AWS::IAM::Group",
+			"Properties": 
+			{
+				"GroupName": "Group_S3_Admin",
+				"Path": "/",
+				"ManagedPolicyArns": 
+				[
+					{
+						"Fn::Join": 
+						[
+							"",
+							[
+								"arn:aws:iam::",
+								{
+									"Ref": "AWS::AccountId"
+								},
+
+								":policy/Policy_MFA"
+							]
+						]
+					},
+
+					"arn:aws:iam::aws:policy/IAMReadOnlyAccess"
+				]
+			},
+			"DependsOn" : ["IAMPOLICYMFA"]
+		},
+		"LogGroup":
+{
+  "Type" : "AWS::Logs::LogGroup",
+  "Properties" : {
+    "LogGroupName" :{
+									"Fn::Sub": 
+									[
+										"CloudTrail/DefaultLogGroup",
+										{
+											"accountid": 
+											{
+												"Ref": "AWS::AccountId"
+											},
+											"region":
+											{
+								"Ref": "AWS::Region"
+							}
+										}
+									]
+								},
+    "RetentionInDays" : "7"
+  }
+},
+"rolecloudtrail": {
+		"Type": "AWS::IAM::Role",
+		"Properties": {
+		"RoleName" : "CloudTrail_CloudWatchLogs_Role",
+		"AssumeRolePolicyDocument": {
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "cloudtrail.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+},
+        "Path": "/",
+        "Policies": [ {
+               "PolicyName": "loggroupcloudtrail",
+               "PolicyDocument": {
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "AWSCloudTrailCreateLogStream20141101",
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogStream"
+            ],
+            "Resource": [
+            	{
+									"Fn::Sub": 
+									[
+										"arn:aws:logs:*:${accountid}:log-group:CloudTrail/DefaultLogGroup:log-stream:${accountid}*",
+										{
+											"accountid": 
+											{
+												"Ref": "AWS::AccountId"
+											},
+											"region":
+											{
+								"Ref": "AWS::Region"
+							}
+										}
+									]
+								}
+            ]
+        },
+        {
+            "Sid": "AWSCloudTrailPutLogEvents20141101",
+            "Effect": "Allow",
+            "Action": [
+                "logs:PutLogEvents"
+            ],
+            "Resource": [
+                {
+									"Fn::Sub": 
+									[
+										"arn:aws:logs:*:${accountid}:log-group:CloudTrail/DefaultLogGroup:log-stream:${accountid}*",
+										{
+											"accountid": 
+											{
+												"Ref": "AWS::AccountId"
+											},
+											"region":
+											{
+								"Ref": "AWS::Region"
+							}
+										}
+									]
+								}
+            ]
+        }
+    ]
+}
+               } ]
+		}
+},
+	"kmscloudtrailkey" : {
+  "Type" : "AWS::KMS::Key",
+  "Properties" : {
+    "Description" : "Key for cloudtrail",
+    "KeyPolicy" : {
+  "Id": "Key policy created by CloudTrail",
+  "Statement": [
+    {
+      "Sid": "Enable IAM User Permissions",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": [
+        {"Fn::Sub": 
+								[
+									"arn:aws:iam::${accountid}:root",
+									{
+										"accountid": 
+										{
+											"Ref" : "AWS::AccountId"
+										}
+									}
+								]}
+        ]
+      },
+      "Action": "kms:*",
+      "Resource": "*"
+    },
+    {
+      "Sid": "Allow CloudTrail to encrypt logs",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "cloudtrail.amazonaws.com"
+      },
+      "Action": "kms:GenerateDataKey*",
+      "Resource": "*",
+      "Condition": {
+        "StringLike": {
+          "kms:EncryptionContext:aws:cloudtrail:arn": {"Fn::Sub": 
+								[
+									"arn:aws:cloudtrail:*:${accountid}:trail/*",
+									{
+										"accountid": 
+										{
+											"Ref" : "AWS::AccountId"
+										}
+									}
+								]}
+        }
+      }
+    },
+    {
+      "Sid": "Allow CloudTrail to describe key",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "cloudtrail.amazonaws.com"
+      },
+      "Action": "kms:DescribeKey",
+      "Resource": "*"
+    },
+    {
+      "Sid": "Allow principals in the account to decrypt log files",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": {"Fn::Sub": 
+								[
+									"arn:aws:iam::${accountid}:root",
+									{
+										"accountid": 
+										{
+											"Ref" : "AWS::AccountId"
+										}
+									}
+								]}
+      },
+      "Action": [
+        "kms:Decrypt",
+        "kms:ReEncryptFrom"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "kms:CallerAccount": {
+											"Ref" : "AWS::AccountId"
+										}
+        },
+        "StringLike": {
+          "kms:EncryptionContext:aws:cloudtrail:arn": {"Fn::Sub": 
+								[
+									"arn:aws:cloudtrail:*:{accountid}:trail/*",
+									{
+										"accountid": 
+										{
+											"Ref" : "AWS::AccountId"
+										}
+									}
+								]}
+        }
+      }
+    },
+    {
+      "Sid": "Allow alias creation during setup",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "*"
+      },
+      "Action": "kms:CreateAlias",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "kms:CallerAccount": {
+											"Ref" : "AWS::AccountId"
+										},
+          "kms:ViaService": "ec2.eu-central-1.amazonaws.com"
+        }
+      }
+    }
+  ]
+    
+}
+  }
+	},
+	"kmscloudtrailkeyalias" : {
+  "Type" : "AWS::KMS::Alias",
+  "Properties" : {
+    "AliasName" : "alias/CloudTrailS3Key",
+    "TargetKeyId": {
+											"Fn::GetAtt": 
+											[
+												"kmscloudtrailkey",
+												"Arn"
+											]
+										}
+  }
+  },
+  "CloudTrailS3Bucket" :
+{
+			"Type": "AWS::S3::Bucket",
+			"Properties": 
+			{
+				"BucketName" : {
+								"Fn::Sub": 
+								[
+									"${stackname}-s3-cloudtrail",
+									{"stackname" : {
+											"Fn::GetAtt": 
+											[
+												"hashvalue",
+												"Data"
+											]
+										}
+										}
+								]
+							},
+				"AccessControl": "Private",
+				"Tags" : [{"Key": "DPC", "Value" : "confidential"},
+					{"Key": "Name","Value":"Baseline"}]	
+			},
+			"DependsOn" : ["hashvalue"]
+		},
+"s3bucketpolicylog":
+{
+   "Type" : "AWS::S3::BucketPolicy",
+   "Properties" : {
+      "Bucket" : {
+								"Fn::Sub": 
+								[
+									"${stackname}-s3-cloudtrail",
+									{"stackname" : {
+											"Fn::GetAtt": 
+											[
+												"hashvalue",
+												"Data"
+											]
+										}
+										}
+								]
+							},
+      "PolicyDocument" : {
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "AWSCloudTrailAclCheck20150319",
+            "Effect": "Allow",
+            "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+            },
+            "Action": "s3:GetBucketAcl",
+            "Resource": {
+								"Fn::Sub": 
+								[
+									"arn:aws:s3:::${stackname}-s3-cloudtrail",
+									{"stackname" : {
+											"Fn::GetAtt": 
+											[
+												"hashvalue",
+												"Data"
+											]
+										}
+										}
+								]
+							}
+        },
+        {
+            "Sid": "AWSCloudTrailWrite20150319",
+            "Effect": "Allow",
+            "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+            },
+            "Action": "s3:PutObject",
+            "Resource": {
+								"Fn::Sub": 
+								[
+									"arn:aws:s3:::${stackname}-s3-cloudtrail/AWSLogs/${accountid}/*",
+									{"stackname" : {
+											"Fn::GetAtt": 
+											[
+												"hashvalue",
+												"Data"
+											]
+										},
+										 "accountid" : { "Ref": "AWS::AccountId" }
+											
+											}
+								]
+							},
+            "Condition": {
+                "StringEquals": {
+                    "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+            }
+        }
+    ]
+}
+   },
+   "DependsOn" : ["CloudTrailS3Bucket"]
+},
+	"CloudTrail" :
+	{
+  "Type" : "AWS::CloudTrail::Trail",
+  "Properties" : {
+  "CloudWatchLogsLogGroupArn" :{
+											"Fn::GetAtt": 
+											[
+												"LogGroup",
+												"Arn"
+											]
+										},
+    "CloudWatchLogsRoleArn" : 
+    {
+											"Fn::GetAtt": 
+											[
+												"rolecloudtrail",
+												"Arn"
+											]
+										},
+    "EnableLogFileValidation" : "True",
+    "EventSelectors" : [{
+  "DataResources" : [ {
+  "Type" : "AWS::S3::Object",
+  "Values" : [ { 
+								"Fn::Sub": 
+								[
+									"arn:aws:s3:::${stackname}-s3-confidential/",
+									{"stackname" : {
+											"Fn::GetAtt": 
+											[
+												"hashvalue",
+												"Data"
+											]
+										}
+										}
+								]
+							},
+							{
+								"Fn::Sub": 
+								[
+									"arn:aws:s3:::${stackname}-s3-internal/",
+									{"stackname" : {
+											"Fn::GetAtt": 
+											[
+												"hashvalue",
+												"Data"
+											]
+										}
+										}
+								]
+							},
+							{
+								"Fn::Sub": 
+								[
+									"arn:aws:s3:::${stackname}-s3-open/",
+									{"stackname" : {
+											"Fn::GetAtt": 
+											[
+												"hashvalue",
+												"Data"
+											]
+										}
+										}
+								]
+							} ]
+} ],
+  "IncludeManagementEvents" : "False",
+  "ReadWriteType" : "All"
+},
+{
+"IncludeManagementEvents" : "True",
+  "ReadWriteType" : "WriteOnly"
+}
+ ],
+    "IncludeGlobalServiceEvents" : "True",
+    "IsLogging" : "True",
+    "IsMultiRegionTrail" : "True",
+    "KMSKeyId" : {"Ref" : "kmscloudtrailkey"},
+    "S3BucketName" : {
+								"Fn::Sub": 
+								[
+									"${stackname}-s3-cloudtrail",
+									{"stackname" : {
+											"Fn::GetAtt": 
+											[
+												"hashvalue",
+												"Data"
+											]
+										}
+										}
+								]
+							},
+    "TrailName" : "baseline-EU-trail"
+  },
+  "DependsOn" : ["rolecloudtrail","LogGroup","s3bucketpolicylog","CloudTrailS3Bucket", "s3openbucket", "s3internalbucket", "s3confidentialbucket"]
+},
+"Groups3Users":
+	{
+			"Type": "AWS::IAM::Group",
+			"Properties": 
+			{
+				"GroupName": "Group_S3_Users",
+				"Path": "/",
+				"ManagedPolicyArns": 
+				[
+
+					"arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+				]
+			}
+		},
+"Policys3Users":
+  {
+			"Type": "AWS::IAM::ManagedPolicy",
+			"Properties": 
+			{
+				"Description": "Enables to put and get objects in buckets not created by the baseline",
+				"Groups": 
+				[
+					"Group_S3_Users"
+				],
+
+				"PolicyDocument": 
+				{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": [
+                "s3:ListBucket"
+            ],
+            "Resource": [
+                { 
+								"Fn::Sub": 
+								[
+									"arn:aws:s3:::${stackname}-*",
+									{"stackname" : {
+											"Fn::GetAtt": 
+											[
+												"hashvalue",
+												"Data"
+											]
+										}
+										}
+								]
+							}
+            ],
+            "Effect": "Deny"
+        },
+        {
+            "Action": [
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:DeleteObject",
+                "s3:PutObjectAcl"
+            ],
+            "NotResource": [
+            { 
+								"Fn::Sub": 
+								[
+									"arn:aws:s3:::${stackname}-*",
+									{"stackname" : {
+											"Fn::GetAtt": 
+											[
+												"hashvalue",
+												"Data"
+											]
+										}
+										}
+								]
+							}
+            ],
+            "Effect": "Allow"
+        }
+    ]
+},
+					
+			"ManagedPolicyName": "Policy_S3_Users"		
+				},
+"DependsOn": 
+			[
+				"Groups3Users","hashlambda" , "hashvalue"
+			]
+				
+			}
+
+}
+}

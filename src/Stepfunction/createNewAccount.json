@@ -1,0 +1,69 @@
+{
+	"Comment": "A state machine that submits a Job to AWS Batch and monitors the Job until it completes.",
+	"StartAt": "Create Account in Organizations",
+	"States": 
+	{
+		"Create Account in Organizations": 
+		{
+			"Type": "Task",
+			"InputPath": "$",
+			"Resource": "arn:aws:lambda:eu-central-1:275662325630:function:createAccountInOrganizations:PROD",
+			"TimeoutSeconds": 600,
+			"ResultPath": "$.accountcreate",
+			"Next": "Job Complete?"
+		},
+
+		"Wait X Seconds": 
+		{
+			"Type": "Wait",
+			"Seconds": 10,
+			"Next": "Get Account Status"
+		},
+
+		"Get Account Status": 
+		{
+			"InputPath": "$",
+			"Type": "Task",
+			"Resource": "arn:aws:lambda:eu-central-1:275662325630:function:getAccountStatus",
+			"Next": "Job Complete?",
+			"ResultPath": "$.accountcreate"
+		},
+
+		"Job Complete?": 
+		{
+			"Type": "Choice",
+			"Choices": 
+			[
+				{
+					"Variable": "$.accountcreate.CreateAccountStatus.State",
+					"StringEquals": "IN_PROGRESS",
+					"Next": "Wait X Seconds"
+				},
+
+				{
+					"Variable": "$.accountcreate.CreateAccountStatus.State",
+					"StringEquals": "SUCCEEDED",
+					"Next": "Job finished"
+				}
+			],
+
+			"Default": "Job Failed"
+		},
+
+		"Job Failed": 
+		{
+			"Type": "Task",
+			"Resource": "arn:aws:lambda:eu-central-1:275662325630:function:returnFailure",
+			"ResultPath": "$.Failed",
+			"End": true
+		},
+
+		"Job finished": 
+		{
+			"InputPath": "$",
+			"Type": "Task",
+			"Resource": "arn:aws:lambda:eu-central-1:275662325630:function:deployProvision",
+			"End": true
+		}
+	}
+}

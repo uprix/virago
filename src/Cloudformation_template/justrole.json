@@ -1,0 +1,81 @@
+{
+"Resources" : {
+"rolecloudtrail": {
+		"Type": "AWS::IAM::Role",
+		"Properties": {
+		"RoleName" : "CloudTrail_CloudWatchLogs_Role",
+		"AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": ["lambda.amazonaws.com"]
+                    },
+                    "Action": ["sts:AssumeRole"]
+                }
+            ]
+        },
+        "Path": "/",
+        "Policies": [ {
+               "PolicyName": "loggroupcloudtrail",
+               "PolicyDocument": {
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "AWSCloudTrailCreateLogStream20141101",
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogStream"
+            ],
+            "Resource": [
+            	{
+									"Fn::Sub": 
+									[
+										"arn:aws:logs:*:${accountid}:log-group:CloudTrail/DefaultLogGroup:log-stream:${accountid}*",
+										{
+											"accountid": 
+											{
+												"Ref": "AWS::AccountId"
+											},
+											"region":
+											{
+								"Ref": "AWS::Region"
+							}
+										}
+									]
+								}
+            ]
+        },
+        {
+            "Sid": "AWSCloudTrailPutLogEvents20141101",
+            "Effect": "Allow",
+            "Action": [
+                "logs:PutLogEvents"
+            ],
+            "Resource": [
+                {
+									"Fn::Sub": 
+									[
+										"arn:aws:logs:*:${accountid}:log-group:CloudTrail/DefaultLogGroup:log-stream:${accountid}*",
+										{
+											"accountid": 
+											{
+												"Ref": "AWS::AccountId"
+											},
+											"region":
+											{
+								"Ref": "AWS::Region"
+							}
+										}
+									]
+								}
+            ]
+        }
+    ]
+}
+               } ]
+		}
+}
+}
+}

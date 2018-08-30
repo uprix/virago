@@ -1,0 +1,73 @@
+TSIOrgsAssumeAnyRole
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "Stmt1497298660000",
+            "Effect": "Allow",
+            "Action": [
+                "sts:AssumeRole"
+            ],
+            "Resource": [
+                "*"
+            ]
+        }
+    ]
+}
+Description
+Allows the Administrator account to assume any role in any account which has a trust relationship to the master account.
+----
+AWSLambdaBasicExecutionRole-9a53371e-8df3-4e2a-aa76-0f268892c58e
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "VisualEditor0",
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            "Resource": [
+                "arn:aws:logs:eu-central-1:275662325630:log-group:/aws/lambda/provisionIamAdmin:*",
+                "arn:aws:logs:eu-central-1:275662325630:log-group:/aws/lambda/createCloudFormationInstance:*",
+                "arn:aws:logs:eu-central-1:275662325630:log-group:/aws/lambda/getStackInstanceState:*"
+            ]
+        },
+        {
+            "Sid": "VisualEditor1",
+            "Effect": "Allow",
+            "Action": "logs:CreateLogGroup",
+            "Resource": "arn:aws:logs:eu-central-1:275662325630:*"
+        }
+    ]
+}
+----
+AWSLambdaCloudFormationExecutionRole-27d5faf6-88de-45bb-b3c6-76007f311971
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "cloudformation:DescribeStacks"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+----
+fullv2cloudformation
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "VisualEditor0",
+            "Effect": "Allow",
+            "Action": "cloudformation:*",
+            "Resource": "*"
+        }
+    ]
+}
+----
+

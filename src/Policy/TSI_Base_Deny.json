@@ -1,0 +1,107 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "TSIDeny",
+            "Effect": "Deny",
+            "Action": [
+                "iam:Create*",
+                "iam:Delete*",
+                "iam:Update*",
+                "iam:Attach*",
+                "iam:Detach*",
+                "iam:Put*",
+                "kms:Create*",
+                "kms:Cancel*",
+                "kms:Decrypt*",
+                "kms:Encrypt*",
+                "kms:Delete*",
+                "kms:Disable*",
+                "kms:Enable*",
+                "kms:Generate*",
+                "kms:Import*",
+                "kms:Schedule*",
+                "kms:Tag*",
+                "kms:Untag*",
+                "kms:Update*",
+                "kms:Put*",
+                "kms:Retire*",
+                "kms:Revoke*",
+                "lambda:*",
+                "events:*",
+                "cloudtrail:*",
+                "cloudformation:*",
+                "sns:*"
+            ],
+            "Resource": [
+                "arn:aws:iam::*:policy/TSI_*",
+                "arn:aws:iam::*:group/TSI_*",
+                "arn:aws:iam::*:role/TSI_*",
+                "arn:aws:iam::*:user/TSI_*",
+                "arn:aws:iam::*:role/OrganizationAccountAccessRole",
+                "arn:aws:kms:*:*:alias/TSI_*",
+                "arn:aws:kms:*:*:key/559f6e72-bb30-46b3-9871-fb53d7805c3d",
+                "arn:aws:kms:*:*:key/a467b73e-3da7-421d-a754-06cf2d3f43ad",
+                "arn:aws:kms:*:*:key/ac48b8a3-89ab-42a4-9da1-9e90c4a125b6",
+                "arn:aws:lambda:*:*:function:TSI_*",
+                "arn:aws:events:*:*:rule/TSI_*",
+                "arn:aws:cloudtrail:*:*:trail/TSI_*",
+                "arn:aws:cloudformation:*:*:stack/StackName-*",
+                "arn:aws:sns:*:*:TSI_*"
+            ]
+        },
+        {
+            "Sid": "DenyIAMSupportAccountOrganization",
+            "Effect": "Deny",
+            "Action": [
+                "iam:DeleteAccountPasswordPolicy",
+                "iam:UpdateAccountPasswordPolicy",
+                "iam:PutUserPolicy",
+                "iam:AttachUserPolicy",
+                "iam:CreateAccountAlias",
+                "iam:DeleteAccountAlias",
+                "iam:CreateGroup",
+                "iam:DeleteGroup",
+                "iam:CreateRole",
+                "iam:DeleteRole",
+                "iam:DeleteServiceLinkedRole",
+                "iam:CreatePolicyVersion",
+                "iam:DeletePolicyVersion",
+                "iam:setDefaultPolicyVersion",
+                "organization:*",
+                "account:*",
+                "support:*",
+                "config:*"
+            ],
+            "Resource": [
+                "*"
+            ]
+        },
+        {
+            "Sid": "TSIDenyIAMDetach",
+            "Effect": "Deny",
+            "Action": [
+                "iam:DetachGroupPolicy",
+                "iam:DetachRolePolicy"
+            ],
+            "Condition": {
+                "ArnEquals": {
+                    "iam:PolicyArn": [
+                        "arn:aws:iam::*:policy/TSI_Base_Deny"
+                    ]
+                }
+            },
+            "Resource": "*"
+        },
+        {
+            "Sid": "DenyIAMPassRole",
+            "Effect": "Deny",
+            "Action": [
+                "iam:PassRole"
+            ],
+            "Resource": [
+                "arn:aws:iam::*:role/OrganizationAccountAccessRole"
+            ]
+        }
+    ]
+}

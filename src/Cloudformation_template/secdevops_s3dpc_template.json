@@ -1,0 +1,93 @@
+{
+"Conditions" : {
+},
+"Resources" : {
+"lambdafunction": {
+  "Type" : "AWS::Lambda::Function",
+  "Properties" : {
+  "FunctionName" : "TSI_Base_S3DPC",
+    "Code" :{
+  "S3Bucket" : "d2c5c7cadcb30307b27eeb81491f1ccec47ab2b3-s3-confidential",
+  "S3Key" : "TSI_Base_S3DPC.zip",
+  "S3ObjectVersion" : "uo0f.1HVRHflGV_13TfpE4Pf1kIu.9c3"
+  },
+  "Handler" : "lambda_function.lambda_handler",
+  "Runtime" : "python3.6",
+  "Role" : { "Fn::Sub": [
+										"arn:aws:iam::${accountid}:role/TSI_Base_S3_DPC_Enforcement_role",
+										{
+											"accountid": 
+											{
+												"Ref": "AWS::AccountId"
+											},
+											"region":
+											{
+								"Ref": "AWS::Region"
+							}
+										}
+									]
+									}
+  }
+  },
+"cloudwatchevent" :
+{
+ "Type" : "AWS::Events::Rule",
+  "Properties" : {
+  "Description" : "Filter rule for s3 dpc enforcement",
+  "Name" : "TSI_Base_CW_Rule_S3_ACL_Filter_Rule",
+  "EventPattern" : {
+  "account": [
+  { "Fn::Sub": [
+										"${accountid}",
+										{
+											"accountid": 
+											{
+												"Ref": "AWS::AccountId"
+											}
+										}
+									]
+					
+									}
+  ],
+  "source": [
+    "aws.s3"
+  ],
+  "detail-type": [
+    "AWS API Call via CloudTrail"
+  ],
+  "detail": {
+    "eventSource": [
+      "s3.amazonaws.com"
+    ],
+    "eventName": [
+      "DeleteBucketCors",
+      "DeleteBucketTagging",
+      "CreateBucket",
+      "PutBucketAcl",
+      "PutBucketCors",
+      "PutBucketPolicy",
+      "PutBucketTagging",
+      "PutBucketWebsite",
+      "DeleteBucketEncryption"
+    ]
+  }
+},
+"Targets":  [ { "Arn" : { "Fn::Sub": [
+										"arn:aws:lambda:${region}:${accountid}:function:TSI_Base_S3DPC",
+										{
+											"accountid": 
+											{
+												"Ref": "AWS::AccountId"
+											},
+											"region":
+											{
+								"Ref": "AWS::Region"
+							}
+										}
+									]
+									},"Id" : "tsi_base_s3dpc" }
+									 ]
+  }
+}
+}
+}

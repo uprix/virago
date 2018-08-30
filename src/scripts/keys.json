@@ -1,0 +1,13 @@
+[
+	 {
+    "accountid": "965102737351",
+    "keys": [
+      {
+        "alias/TSI_Base_ConfidentialS3Key": "5efba888-176a-44fd-958d-596c58ed5410"
+      },
+      {
+        "alias/TSI_Base_InternalS3Key": "8be4f303-1b87-4728-99e1-f69ad338ead2"
+      }
+    ]
+  }
+]

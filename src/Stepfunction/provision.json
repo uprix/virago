@@ -1,0 +1,154 @@
+{
+  "Comment": "A state machine that submits a Job to AWS Batch and monitors the Job until it completes.",
+  "StartAt": "Create Cloudformation Role",
+  "States": {
+    "Create Cloudformation Role": {
+      "Type": "Task",
+      "InputPath": "$",
+      "Resource": "arn:aws:lambda:eu-central-1:275662325630:function:provisionIamAdmin:Baseline-PROD",
+      "ResultPath": "$.cfrole",
+      "Next": "Wait for iam"
+      },
+    "Wait for iam": {
+      "Type": "Wait",
+      "Seconds": 20,
+      "Next": "Create Password Policy"
+    },
+    "Create Password Policy": {
+      "Type": "Task",
+      "InputPath": "$",
+      "Resource": "arn:aws:lambda:eu-central-1:275662325630:function:createPasswordPolicy:Baseline-PROD",
+      "Next": "Create Event Bus",
+      "ResultPath": "$.passwordpolicy"
+      },
+    "Create Event Bus": {
+      "Type": "Task",
+      "InputPath": "$",
+      "Resource": "arn:aws:lambda:eu-central-1:275662325630:function:AddEventBusOnSecDevOps:Baseline-PROD",
+      "Next": "Configure secdevops s3 bucket",
+      "ResultPath" : "$.addeventbus"
+      },
+     "Configure secdevops s3 bucket": {
+      "Type": "Task",
+      "InputPath": "$",
+      "Resource": "arn:aws:lambda:eu-central-1:275662325630:function:addCloudTrailPolicy:Baseline-PROD",
+      "Next": "Create Stack Instance",
+      "ResultPath" : "$.secdevopsS3Bucket"
+      },
+    "Create Stack Instance": {
+      "Type": "Task",
+      "InputPath" : "$",
+      "Resource": "arn:aws:lambda:eu-central-1:275662325630:function:createCloudFormationInstance:Baseline-PROD",
+      "TimeoutSeconds": 600,
+      "ResultPath" : "$.baseline",
+      "Next": "Get Job Status"
+    },
+    "Wait X Seconds": {
+      "Type": "Wait",
+      "Seconds": 50,
+      "Next": "Get Job Status"
+    },
+    "Get Job Status": {
+      "InputPath" : "$",
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:eu-central-1:275662325630:function:getStackInstanceState:Baseline-PROD",
+      "Next": "Job Complete?",
+      "ResultPath": "$.Statusbaseline"
+    },
+    "Job Complete?": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.Statusbaseline",
+          "StringEquals": "RUNNING",
+          "Next": "Wait X Seconds"
+        },
+        {
+          "Variable": "$.Statusbaseline",
+          "StringEquals": "SUCCEEDED",
+          "Next": "Wait for iam 2"
+        }
+      ],
+      "Default": "Job Failed"
+    },
+    "Job Failed": {
+      "Type": "Fail",
+      "Cause": "Couldn't create stack instance",
+      "Error": "DescribeJob returned FAILED"
+    },
+    "Job finished": {
+      "Type": "Succeed"
+          },
+    "Wait for iam 2": {
+      "Type": "Wait",
+      "Seconds": 20,
+      "Next": "Provision Groups"
+    },
+    "Provision Groups" : {
+    "Type": "Task",
+      "InputPath" : "$",
+      "Resource": "arn:aws:lambda:eu-central-1:275662325630:function:createGroup:Baseline-PROD",
+      "ResultPath" : "$.provisiongroup",
+      "TimeoutSeconds": 600,
+      "Next": "Provision Roles"
+    },
+    "Provision Roles" : {
+    "Type": "Task",
+      "InputPath" : "$",
+      "Resource": "arn:aws:lambda:eu-central-1:275662325630:function:createRole:Baseline-PROD",
+      "ResultPath" : "$.provisiongroup",
+      "TimeoutSeconds": 600,
+      "Next": "Create Stack Instance SNS"
+    },
+    "Create Stack Instance SNS": {
+      "Type": "Task",
+      "InputPath" : "$",
+      "Resource": "arn:aws:lambda:eu-central-1:275662325630:function:createCloudFormationInstance:SecurityAlert-PROD",
+      "TimeoutSeconds": 600,
+      "Next": "Get Job Status SNS",
+      "ResultPath": "$.securitystack"
+    },
+    "Get Job Status SNS": {
+      "InputPath" : "$",
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:eu-central-1:275662325630:function:getStackInstanceState:SecurityAlert-PROD",
+      "Next": "Job Complete? SNS",
+      "ResultPath": "$.Statussns"
+    },
+    "Job Complete? SNS": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.Statussns",
+          "StringEquals": "RUNNING",
+          "Next": "Wait X Seconds SNS"
+        },
+        {
+          "Variable": "$.Statussns",
+          "StringEquals": "SUCCEEDED",
+          "Next": "Create Admin User"
+        }
+      ],
+      "Default": "Job Failed"
+    },
+    "Create Admin User": {
+      "InputPath" : "$",
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:eu-central-1:275662325630:function:createAdminUser:Baseline-PROD",
+      "Next": "Create S3 DPC rules",
+      "ResultPath": "$.AdminUser"
+    },
+    "Create S3 DPC rules": {
+      "InputPath" : "$",
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:eu-central-1:275662325630:function:addS3RulesOnCustomerAccount:Baseline-PROD",
+      "Next": "Job finished",
+      "ResultPath": "$.s3dpc"
+    },
+    "Wait X Seconds SNS": {
+      "Type": "Wait",
+      "Seconds": 50,
+      "Next": "Get Job Status SNS"
+    }
+  }
+}
